@@ -24,7 +24,7 @@
 #include "hs-route-api-sysinfo.h"
 #include "hs-route-api-storage.h"
 #include "hs-route-api-image-upload.h"
-
+#include "hs-route-api-face-detect.h"
 
 #define SERVER_NAME "http-server-app"
 #define SERVER_PORT 8080
@@ -56,6 +56,8 @@ static int route_modules_init(void)
 	ret = hs_route_api_image_upload_init();
 	retv_if(ret, -1);
 
+	ret = hs_route_api_face_detect_init();
+	retv_if(ret, -1);
 
 	return 0;
 }
