@@ -32,6 +32,7 @@
 #include "http-server-route.h"
 #include "hs-util-json.h"
 #include "face-detect.h"
+#include "image-cropper.h"
 
 /* Face Detect Model from Tizen */
 #define FACE_DETECT_MODEL_FILEPATH "/usr/share/OpenCV/haarcascades/haarcascade_frontalface_alt.xml"
@@ -60,21 +61,22 @@ typedef struct _face_detect_data_s face_detect_data_s;
 static void _on_face_detected_cb(mv_source_h source, mv_engine_config_h engine_cfg,
 	mv_rectangle_s *locations, int number_of_faces, void *user_data)
 {
-	JsonBuilder *builder = user_data;
+	face_detect_data_s *fd_data = user_data;
+	int error_code = 0;
+
 	ret_if(number_of_faces == 0);
 	_D("Number of Faces : %d", number_of_faces);
 
-	json_builder_begin_array(builder);
 	for (int i = 0; i < number_of_faces; ++i) {
-		json_builder_begin_object(builder);
-		util_json_add_int(builder, "width", locations[i].width);
-		util_json_add_int(builder, "height", locations[i].height);
-		util_json_add_int(builder, "size", locations[i].width * locations[i].height);
-		util_json_add_int(builder, "x", locations[i].point.x);
-		util_json_add_int(builder, "y", locations[i].point.y);
-		json_builder_end_object(builder);
+		error_code = image_cropper_crop(fd_data->image_data,
+				fd_data->size,
+				locations[i].point.x,
+				locations[i].point.y,
+				locations[i].point.x + locations[i].width,
+				locations[i].point.y + locations[i].height,
+				"/home/owner/apps_rw/org.tizen.httpserver/data/face_sample_0.jpg");
+		continue_if(error_code);
 	}
-	json_builder_end_array(builder);
 }
 
 static void _unset_engine_config(void)
@@ -110,11 +112,11 @@ ERROR:
 static void _free_face_detect_data(void *user_data)
 {
 	face_detect_data_s *fd_data = user_data;
-	g_free(fd_data->image_name);
-	g_free(fd_data->image_data);
-	g_free(fd_data->type);
-	g_free(fd_data->result);
-	g_free(fd_data);
+	free(fd_data->image_name);
+	free(fd_data->image_data);
+	free(fd_data->type);
+	free(fd_data->result);
+	free(fd_data);
 }
 
 static gboolean face_detect_callback_call(void *user_data)
@@ -140,8 +142,6 @@ static gpointer _create_thread(void *data)
 	image_util_decode_h imageDecoder = NULL;
 	int error_code = 0;
 
-	JsonBuilder *builder = NULL;
-
 	/* Decode the image file from which the face is to be detected, and fill the g_source handle with the decoded raw data. */
 	error_code = image_util_decode_create(&imageDecoder);
 	retv_if(error_code != IMAGE_UTIL_ERROR_NONE, NULL);
@@ -165,9 +165,6 @@ static gpointer _create_thread(void *data)
 	image_util_decode_destroy(imageDecoder);
 	imageDecoder = NULL;
 
-	g_free(fd_data->image_data);
-	fd_data->image_data = NULL;
-
 	/* Create a source handle using the mv_create_source() function with the mv_source_h member of the detection data structure as the out parameter: */
 	/* The source stores the face to be detected and all related data. You manage the source through the source handle. */
 	error_code = mv_create_source(&facedata.g_source);
@@ -184,20 +181,16 @@ static gpointer _create_thread(void *data)
 	error_code = _set_engine_config();
 	goto_if(error_code, ERROR);
 
-	builder = json_builder_new();
-	goto_if(!builder, ERROR);
-
 	/* When the source and engine configuration handles are ready, use the mv_face_detect() function to detect faces: */
-	error_code = mv_face_detect(facedata.g_source, facedata.g_engine_config, _on_face_detected_cb, builder);
+	error_code = mv_face_detect(facedata.g_source, facedata.g_engine_config, _on_face_detected_cb, fd_data);
 	goto_if(error_code != MEDIA_VISION_ERROR_NONE, ERROR);
+
+	_D("After mv_face_detect()");
 
 	/* After the face detection is complete, destroy the source and engine configuration handles using the  mv_destroy_source() and mv_destroy_engine_config() functions: */
 	mv_destroy_source(facedata.g_source);
 	facedata.g_source = NULL;
 	_unset_engine_config();
-
-	fd_data->result = util_json_generate_str(builder, NULL);
-	g_object_unref(builder);
 
 	fd_data->error = 0;
 	g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
@@ -218,9 +211,6 @@ ERROR:
 
 	_unset_engine_config();
 
-	if (builder)
-		g_object_unref(builder);
-
 	fd_data->error = -1;
 	g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,
 		face_detect_callback_call, fd_data, _free_face_detect_data);
@@ -238,13 +228,13 @@ int face_detect(const char *image_name, const unsigned char *image_data, unsigne
 	retv_if(size == 0, -1);
 	retv_if(!callback, -1);
 
-	fd_data = g_try_new(face_detect_data_s, 1);
+	fd_data = calloc(1, sizeof(face_detect_data_s));
 	retv_if(!fd_data, -1);
 
-	fd_data->image_name = g_strdup(image_name);
+	fd_data->image_name = strdup(image_name);
 	fd_data->image_data = g_memdup(image_data, size);
 	fd_data->size = size;
-	fd_data->type = g_strdup(image_type);
+	fd_data->type = strdup(image_type);
 	fd_data->callback = callback;
 	fd_data->user_data = user_data;
 	fd_data->result = NULL;

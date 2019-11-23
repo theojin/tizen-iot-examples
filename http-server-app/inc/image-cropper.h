@@ -17,6 +17,6 @@
 #ifndef __IMAGE_CROPPER_H__
 #define __IMAGE_CROPPER_H__
 
-int image_cropper_crop(unsigned char *image_data, unsigned int size, unsigned int start_x, unsigned int start_y, unsigned int end_x, unsigned int end_y, const char *file)
+int image_cropper_crop(unsigned char *image_data, unsigned int size, unsigned int start_x, unsigned int start_y, unsigned int end_x, unsigned int end_y, const char *file);
 
 #endif /* __IMAGE_CROPPER_H__ */
