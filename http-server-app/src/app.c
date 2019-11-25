@@ -25,6 +25,7 @@
 #include "hs-route-api-storage.h"
 #include "hs-route-api-image-upload.h"
 #include "hs-route-api-face-detect.h"
+#include "hs-route-api-jinny.h"
 #include "face-recognize.h"
 
 #define SERVER_NAME "http-server-app"
@@ -46,6 +47,9 @@ static int route_modules_init(void)
 	retv_if(ret, -1);
 
 	ret = hs_route_api_applist_init();
+	retv_if(ret, -1);
+
+	ret = hs_route_api_jinny_init();
 	retv_if(ret, -1);
 
 	ret = hs_route_api_sysinfo_init();
